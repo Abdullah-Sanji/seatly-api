@@ -29,4 +29,12 @@ describe('GET /health', () => {
     expect(res.body.code).toBe('NOT_FOUND');
     expect(res.body.details).toEqual({});
   });
+
+  it('reports redis as down with 503 when the connection is gone', async () => {
+    ctx.redis.disconnect();
+    const res = await request(ctx.app.getHttpServer()).get('/health');
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ postgres: 'ok', redis: 'down' });
+    await ctx.redis.connect();
+  });
 });

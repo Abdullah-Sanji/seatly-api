@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { HoldsProcessor } from './holds.processor';
 import { EXPIRE_HOLD_JOB, OPEN_SALES_JOB } from './queue.constants';
@@ -29,9 +30,11 @@ describe('HoldsProcessor expire-hold', () => {
   });
 
   it('ignores unknown job names', async () => {
+    const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     const { processor, holds } = build(true);
     await expect(processor.process(job('something-else', {}))).resolves.toBeUndefined();
     expect(holds.expire).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });
 

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { Prisma } from '@prisma/client';
 import * as argon2 from 'argon2';
 import Redis from 'ioredis';
 import { AppException } from '../common/errors/app.exception';
@@ -28,7 +29,15 @@ export class AuthService {
       throw new AppException(ErrorCode.EMAIL_TAKEN, HttpStatus.CONFLICT, 'Email already registered');
     }
     const passwordHash = await argon2.hash(password);
-    const user = await this.prisma.user.create({ data: { email, passwordHash } });
+    let user: { id: string; email: string };
+    try {
+      user = await this.prisma.user.create({ data: { email, passwordHash } });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new AppException(ErrorCode.EMAIL_TAKEN, HttpStatus.CONFLICT, 'Email already registered');
+      }
+      throw error;
+    }
     return this.issueTokens({ id: user.id, email: user.email });
   }
 

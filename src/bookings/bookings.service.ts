@@ -70,12 +70,20 @@ export class BookingsService {
       throw new AppException(ErrorCode.SEAT_HELD, HttpStatus.CONFLICT, 'Seat is held by another user');
     }
 
-    await this.holdsQueue.scheduleExpiry(
-      { eventId, seatId, userId: user.id, holdToken: result.holdToken },
-      this.holds.ttlSeconds * 1000,
-    );
     const expiresAt = result.expiresAt.toISOString();
-    await this.publisher.publish(eventId, { type: 'held', seatIds: [seatId], expiresAt });
+    try {
+      await this.holdsQueue.scheduleExpiry(
+        { eventId, seatId, userId: user.id, holdToken: result.holdToken },
+        this.holds.ttlSeconds * 1000,
+      );
+      await this.publisher.publish(eventId, { type: 'held', seatIds: [seatId], expiresAt });
+    } catch (error) {
+      // The hold exists in Redis. If the expiry job was not scheduled the key's own TTL (ttl + grace)
+      // still frees the seat; only the broadcast is lost and the seat map rebuilds within 5 s.
+      this.logger.error(
+        `Post-hold scheduling/broadcast failed for seat ${seatId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
     return { seatId, expiresAt };
   }
 

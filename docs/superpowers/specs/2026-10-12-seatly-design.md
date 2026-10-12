@@ -110,9 +110,9 @@ on the same seat.
 4. Load the seat; if `status = sold` → `409 SEAT_SOLD`. (Fast reject only; the
    confirm transaction is the real guarantee.)
 5. Generate `holdToken`. Run Lua script `hold.lua` atomically:
-   `SET hold:{e}:{s} "{u}:{token}" NX EX ttl`; if it succeeded, `SADD holds:user:{u}:{e} {s}`
+   `SET hold:{e}:{s} "{u}:{token}" NX EX (ttl + 5 s grace)`; if it succeeded, `SADD holds:user:{u}:{e} {s}`
    and `EXPIRE` the set to `ttl + 5 s grace`. If `SET NX` failed → `409 SEAT_HELD`.
-6. Enqueue BullMQ job `expire-hold`, id `hold:{e}:{s}:{token}`, delay `ttl` seconds,
+6. Enqueue BullMQ job `expire-hold`, id `hold.{e}.{s}.{token}`, delay `ttl` seconds,
    data `{eventId, seatId, userId, holdToken}`.
 7. `DEL seatmap:{e}`; `PUBLISH events:{e} {"type":"held","seatIds":[s],"expiresAt":…}`.
 8. `200 { seatId, expiresAt }`.

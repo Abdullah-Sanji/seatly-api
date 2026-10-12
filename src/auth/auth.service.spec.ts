@@ -1,4 +1,5 @@
 import { JwtService } from '@nestjs/jwt';
+import { Prisma } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { AuthService } from './auth.service';
 import { ErrorCode } from '../common/errors/error-code.enum';
@@ -100,6 +101,17 @@ describe('AuthService', () => {
     expect(await service.verifyAccessToken(pair.accessToken)).toEqual({ id: 'u1', email: 'a@b.c' });
     await expect(service.verifyAccessToken('garbage')).rejects.toMatchObject({
       code: ErrorCode.UNAUTHORIZED,
+    });
+  });
+
+  it('register maps a unique-constraint race (P2002) to EMAIL_TAKEN', async () => {
+    const { service, prisma } = build();
+    prisma.user.findUnique.mockResolvedValue(null);
+    prisma.user.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('dup', { code: 'P2002', clientVersion: 'test' }),
+    );
+    await expect(service.register('a@b.c', 'password123')).rejects.toMatchObject({
+      response: expect.objectContaining({ code: ErrorCode.EMAIL_TAKEN }),
     });
   });
 });

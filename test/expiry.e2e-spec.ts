@@ -1,13 +1,41 @@
 import Redis from 'ioredis';
+import { io, Socket } from 'socket.io-client';
 import request from 'supertest';
 import { holdKey } from '../src/common/redis-keys';
 import { SeatUpdateMessage } from '../src/realtime/messages';
 import { createEvent, registerUser, sleep } from './setup/fixtures';
 import { startTestApp, TestContext } from './setup/test-app';
 
+function connect(baseUrl: string, token: string): Promise<Socket> {
+  return new Promise((resolve, reject) => {
+    const socket = io(baseUrl, { auth: { token }, transports: ['websocket'] });
+    socket.once('connect', () => resolve(socket));
+    socket.once('connect_error', reject);
+  });
+}
+
+function join(socket: Socket, eventId: string): Promise<unknown> {
+  return new Promise((resolve) => socket.emit('join_event', { eventId }, resolve));
+}
+
+function waitForReleased(socket: Socket, timeoutMs = 3000): Promise<SeatUpdateMessage> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('timed out waiting for released')), timeoutMs);
+    const listener = (message: SeatUpdateMessage) => {
+      if (message.type === 'released') {
+        clearTimeout(timer);
+        socket.off('seat_update', listener);
+        resolve(message);
+      }
+    };
+    socket.on('seat_update', listener);
+  });
+}
+
 describe('hold expiry jobs', () => {
   let ctx: TestContext;
   let subscriber: Redis;
+  const sockets: Socket[] = [];
   const published: SeatUpdateMessage[] = [];
   const http = () => request(ctx.app.getHttpServer());
   const hold = (eventId: string, seatId: string, token: string) =>
@@ -34,6 +62,7 @@ describe('hold expiry jobs', () => {
   });
 
   afterAll(async () => {
+    sockets.forEach((s) => s.disconnect());
     await subscriber.quit();
     await ctx.stop();
   });
@@ -43,6 +72,12 @@ describe('hold expiry jobs', () => {
     const [seat] = event.seats;
     const user = await registerUser(ctx.app, 'expiry@test.dev');
 
+    const socket = await connect(ctx.baseUrl, user.accessToken);
+    sockets.push(socket);
+    await join(socket, event.id);
+    const releasedOnSocket = waitForReleased(socket, 8000);
+    releasedOnSocket.catch(() => undefined);
+
     expect((await hold(event.id, seat.id, user.accessToken)).status).toBe(200);
     expect(await stateOf(event.id, seat.id)).toBe('held');
 
@@ -50,6 +85,8 @@ describe('hold expiry jobs', () => {
     expect(await stateOf(event.id, seat.id)).toBe('available');
     expect(await ctx.redis.exists(holdKey(event.id, seat.id))).toBe(0);
     expect(releasedCount(seat.id)).toBe(1);
+    expect(await releasedOnSocket).toEqual({ type: 'released', seatIds: [seat.id] });
+    socket.disconnect();
   });
 
   it('a stale job from a released hold does not kill a newer hold on the same seat', async () => {
