@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { EventStatus, Prisma, SeatStatus } from '@prisma/client';
 import { AuthUser } from '../auth/auth.types';
 import { AppException } from '../common/errors/app.exception';
@@ -36,6 +36,8 @@ interface LockedSeatRow {
 
 @Injectable()
 export class BookingsService {
+  private readonly logger = new Logger(BookingsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: EventsService,
@@ -96,7 +98,7 @@ export class BookingsService {
       throw new AppException(ErrorCode.HOLD_EXPIRED, HttpStatus.CONFLICT, 'Some holds expired', { lostSeatIds });
     }
 
-    // Lock in a stable order so two overlapping confirms never deadlock.
+    // ORDER BY id in the SQL below fixes the lock order (no deadlocks); this sort only makes the response deterministic.
     const seatIds = [...heldSeatIds].sort();
     const result = await this.prisma.$transaction(async (tx) => {
       const rows = await tx.$queryRaw<LockedSeatRow[]>(
@@ -124,8 +126,16 @@ export class BookingsService {
       return { bookingId: booking.id, seatIds, totalCents };
     });
 
-    await this.holds.clearHolds(eventId, user.id, seatIds);
-    await this.publisher.publish(eventId, { type: 'sold', seatIds });
+    try {
+      await this.holds.clearHolds(eventId, user.id, seatIds);
+      await this.publisher.publish(eventId, { type: 'sold', seatIds });
+    } catch (error) {
+      // The booking is committed; Redis is repaired by the hold TTL and the expiry job, and the
+      // seat map rebuilds within its 5 s cache. Never turn a real booking into an error response.
+      this.logger.error(
+        `Post-commit cleanup failed for booking ${result.bookingId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
     return result;
   }
 
