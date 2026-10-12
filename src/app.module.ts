@@ -1,9 +1,13 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
+import Redis from 'ioredis';
 import { AuthModule } from './auth/auth.module';
-import { validateEnv } from './config/env.validation';
+import { Env, validateEnv } from './config/env.validation';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { REDIS_CLIENT } from './redis/redis.constants';
 import { RedisModule } from './redis/redis.module';
 
 @Module({
@@ -15,6 +19,14 @@ import { RedisModule } from './redis/redis.module';
     }),
     PrismaModule,
     RedisModule,
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService, REDIS_CLIENT],
+      useFactory: (config: ConfigService<Env, true>, redis: Redis) => ({
+        throttlers: [{ name: 'default', ttl: 60_000, limit: 100 }],
+        storage: new ThrottlerStorageRedisService(redis),
+        skipIf: () => !config.get('THROTTLE_ENABLED'),
+      }),
+    }),
     HealthModule,
     AuthModule,
   ],
