@@ -11,6 +11,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { REDIS_CLIENT } from './redis/redis.constants';
 import { RedisModule } from './redis/redis.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { HoldsModule } from './holds/holds.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     AuthModule,
     EventsModule,
     RealtimeModule,
+    HoldsModule,
   ],
 })
 export class AppModule {}
