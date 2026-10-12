@@ -4,6 +4,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import Redis from 'ioredis';
 import { AuthModule } from './auth/auth.module';
+import { EventsModule } from './events/events.module';
 import { Env, validateEnv } from './config/env.validation';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -29,6 +30,7 @@ import { RedisModule } from './redis/redis.module';
     }),
     HealthModule,
     AuthModule,
+    EventsModule,
   ],
 })
 export class AppModule {}
