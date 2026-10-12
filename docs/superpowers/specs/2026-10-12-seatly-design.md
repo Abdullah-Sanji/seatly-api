@@ -62,7 +62,7 @@ Cross-cutting:
 - Access token: JWT, 15 min, returned in the response body, sent as `Authorization: Bearer`.
 - Refresh token: JWT with a random `jti`, 7 days, delivered **only** as a cookie:
   `httpOnly`, `Secure` (disabled in local dev over http), `SameSite=Lax`,
-  `Path=/auth/refresh`. The browser never reads it.
+  `Path=/auth`. The path is `/auth` rather than `/auth/refresh` so that `POST /auth/logout` also receives the cookie and can revoke it. The browser never reads it.
 - Allowlist: Redis key `refresh:{userId}:{jti}` with the token's TTL. Refresh rotates:
   the old `jti` is deleted, a new one is written and a new cookie is set. Presenting a
   `jti` that is not in Redis returns `401 REFRESH_INVALID`. Logout deletes the `jti`

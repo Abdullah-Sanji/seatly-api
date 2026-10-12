@@ -20,7 +20,7 @@
 - Redis key names exactly as spec §4: `hold:{eventId}:{seatId}`, `holds:user:{userId}:{eventId}`, `seatmap:{eventId}`, `refresh:{userId}:{jti}`, channel `events:{eventId}`.
 - Hold key value is `"{userId}:{holdToken}"`, `holdToken` = random UUID per hold.
 - Hold TTL comes from `HOLD_TTL_SECONDS` (default 300). Max 6 held seats per user per event.
-- Refresh cookie name `seatly_refresh`, `httpOnly`, `sameSite=lax`, `path=/auth/refresh`, `secure` from `COOKIE_SECURE` env (default false).
+- Refresh cookie name `seatly_refresh`, `httpOnly`, `sameSite=lax`, `path=/auth`, `secure` from `COOKIE_SECURE` env (default false).
 - Access token 15 min, refresh token 7 days.
 - BullMQ job ids must not contain `:` — use `.` as the separator (`hold.{eventId}.{seatId}.{holdToken}`, `open-sales.{eventId}`).
 - Tests: unit specs live next to code as `*.spec.ts`; e2e specs live in `test/*.e2e-spec.ts` and start real Postgres + Redis via Testcontainers. Docker Desktop must be running for e2e.
@@ -1508,7 +1508,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
   - `AuthService.refresh(refreshToken: string): Promise<TokenPair>` (401 `REFRESH_INVALID` on bad/reused token)
   - `AuthService.logout(userId: string, refreshToken: string | undefined): Promise<void>`
   - `AuthService.verifyAccessToken(token: string): Promise<AuthUser>` (throws `AppException UNAUTHORIZED`) — used by the socket gateway in Task 17.
-  - constants `ACCESS_TOKEN_TTL = '15m'`, `REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 3600`, `REFRESH_COOKIE = 'seatly_refresh'`, `REFRESH_COOKIE_PATH = '/auth/refresh'`.
+  - constants `ACCESS_TOKEN_TTL = '15m'`, `REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 3600`, `REFRESH_COOKIE = 'seatly_refresh'`, `REFRESH_COOKIE_PATH = '/auth'`.
 - Consumes: `PrismaService`, `REDIS_CLIENT`, `refreshKey`, `AppException`, `ErrorCode`.
 
 - [ ] **Step 1: Write types and constants**
@@ -1542,7 +1542,7 @@ export interface JwtRefreshPayload {
 export const ACCESS_TOKEN_TTL = '15m';
 export const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 3600;
 export const REFRESH_COOKIE = 'seatly_refresh';
-export const REFRESH_COOKIE_PATH = '/auth/refresh';
+export const REFRESH_COOKIE_PATH = '/auth';
 ```
 
 - [ ] **Step 2: Write the failing service test**

@@ -21,7 +21,7 @@ describe('auth', () => {
     const cookie = String(res.headers['set-cookie'][0]);
     expect(cookie).toMatch(/^seatly_refresh=/);
     expect(cookie).toMatch(/HttpOnly/);
-    expect(cookie).toMatch(/Path=\/auth\/refresh/);
+    expect(cookie).toMatch(/Path=\/auth(;|$)/);
     expect(cookie).toMatch(/SameSite=Lax/);
   });
 
@@ -84,7 +84,9 @@ describe('auth', () => {
       .set('Authorization', `Bearer ${accessToken}`)
       .set('Cookie', cookie);
     expect(res.status).toBe(204);
-    expect(String(res.headers['set-cookie'][0])).toMatch(/seatly_refresh=;/);
+    const cleared = String(res.headers['set-cookie'][0]);
+    expect(cleared).toMatch(/seatly_refresh=;/);
+    expect(cleared).toMatch(/Path=\/auth(;|$)/);
 
     const refresh = await http().post('/auth/refresh').set('Cookie', cookie);
     expect(refresh.status).toBe(401);
