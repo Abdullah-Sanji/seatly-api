@@ -20,33 +20,42 @@ return 1
 /**
  * KEYS[1] = hold key   KEYS[2] = user set
  * ARGV[1] = userId     ARGV[2] = seatId
- * Deletes the hold only if its value starts with "{userId}:". Returns 1 if deleted.
+ * Deletes the hold only if its value starts with "{userId}:" and returns 1.
+ * If the caller does not own the seat (key gone or owned by someone else) the seat is still
+ * dropped from the caller's set, since they do not hold it either way; returns 0.
  */
 export const RELEASE_LUA = `
 local v = redis.call('GET', KEYS[1])
-if not v then
-  return 0
-end
 local prefix = ARGV[1] .. ':'
-if string.sub(v, 1, string.len(prefix)) ~= prefix then
-  return 0
+if v and string.sub(v, 1, string.len(prefix)) == prefix then
+  redis.call('DEL', KEYS[1])
+  redis.call('SREM', KEYS[2], ARGV[2])
+  return 1
 end
-redis.call('DEL', KEYS[1])
+-- Caller does not own this seat: drop any stale entry from their set.
 redis.call('SREM', KEYS[2], ARGV[2])
-return 1
+return 0
 `;
 
 /**
  * KEYS[1] = hold key   KEYS[2] = user set
- * ARGV[1] = expected value "{userId}:{holdToken}"   ARGV[2] = seatId
+ * ARGV[1] = expected value "{userId}:{holdToken}"   ARGV[2] = seatId   ARGV[3] = userId
  * Deletes the hold only if the value matches exactly, so a stale job never removes a newer hold.
+ * On a mismatch the set entry is dropped only when the key is gone (TTL beat the job) or owned by
+ * another user; a newer hold by the same user keeps its entry.
  */
 export const EXPIRE_LUA = `
 local v = redis.call('GET', KEYS[1])
-if v ~= ARGV[1] then
-  return 0
+if v == ARGV[1] then
+  redis.call('DEL', KEYS[1])
+  redis.call('SREM', KEYS[2], ARGV[2])
+  return 1
 end
-redis.call('DEL', KEYS[1])
-redis.call('SREM', KEYS[2], ARGV[2])
-return 1
+-- Value gone (TTL beat the job) or owned by someone else: drop the stale set entry.
+-- A newer hold by the same user keeps its entry.
+local prefix = ARGV[3] .. ':'
+if (not v) or string.sub(v, 1, string.len(prefix)) ~= prefix then
+  redis.call('SREM', KEYS[2], ARGV[2])
+end
+return 0
 `;

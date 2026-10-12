@@ -69,4 +69,44 @@ describe('HoldsService (real Redis)', () => {
     await holds.clearHolds('e1', 'u1', ['s1', 's2']);
     expect(await ctx.redis.exists(holdKey('e1', 's1'), holdKey('e1', 's2'), userHoldsKey('u1', 'e1'))).toBe(0);
   });
+
+  describe('stale user-set entries after natural TTL expiry', () => {
+    const heldToken = async (eventId: string, seatId: string, userId: string): Promise<string> => {
+      const r = await holds.tryHold(eventId, seatId, userId);
+      if (r.outcome !== 'held') throw new Error('expected held');
+      return r.holdToken;
+    };
+
+    it('expire on a vanished key drops the set entry', async () => {
+      const token = await heldToken('e1', 's1', 'u1');
+      await ctx.redis.del(holdKey('e1', 's1'));
+      expect(await holds.expire('e1', 's1', 'u1', token)).toBe(false);
+      expect(await ctx.redis.sismember(userHoldsKey('u1', 'e1'), 's1')).toBe(0);
+    });
+
+    it('release on a vanished key drops the set entry', async () => {
+      await heldToken('e1', 's1', 'u1');
+      await ctx.redis.del(holdKey('e1', 's1'));
+      expect(await holds.release('e1', 's1', 'u1')).toBe(false);
+      expect(await ctx.redis.sismember(userHoldsKey('u1', 'e1'), 's1')).toBe(0);
+    });
+
+    it('expire with an old token keeps a newer hold by the same user', async () => {
+      const tokenA = await heldToken('e1', 's1', 'u1');
+      await ctx.redis.del(holdKey('e1', 's1'));
+      await heldToken('e1', 's1', 'u1');
+      expect(await holds.expire('e1', 's1', 'u1', tokenA)).toBe(false);
+      expect(await ctx.redis.exists(holdKey('e1', 's1'))).toBe(1);
+      expect(await ctx.redis.sismember(userHoldsKey('u1', 'e1'), 's1')).toBe(1);
+    });
+
+    it('expire drops the set entry when another user now holds the seat', async () => {
+      const token = await heldToken('e1', 's1', 'u1');
+      await ctx.redis.del(holdKey('e1', 's1'));
+      await heldToken('e1', 's1', 'u2');
+      expect(await holds.expire('e1', 's1', 'u1', token)).toBe(false);
+      expect(await ctx.redis.exists(holdKey('e1', 's1'))).toBe(1);
+      expect(await ctx.redis.sismember(userHoldsKey('u1', 'e1'), 's1')).toBe(0);
+    });
+  });
 });

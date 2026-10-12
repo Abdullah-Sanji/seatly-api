@@ -25,7 +25,13 @@ interface HoldCommands {
     maxSeats: number,
   ): Promise<number>;
   seatlyRelease(holdKey: string, userSetKey: string, userId: string, seatId: string): Promise<number>;
-  seatlyExpire(holdKey: string, userSetKey: string, expected: string, seatId: string): Promise<number>;
+  seatlyExpire(
+    holdKey: string,
+    userSetKey: string,
+    expected: string,
+    seatId: string,
+    userId: string,
+  ): Promise<number>;
 }
 
 @Injectable()
@@ -75,6 +81,7 @@ export class HoldsService {
       userHoldsKey(userId, eventId),
       holdValue(userId, holdToken),
       seatId,
+      userId,
     );
     return result === 1;
   }
