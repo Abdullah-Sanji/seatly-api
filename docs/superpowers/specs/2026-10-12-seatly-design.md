@@ -156,7 +156,7 @@ Job options: 3 attempts, exponential backoff from 1 s, `removeOnComplete: true`.
 ### 5.5 Open sales job — `open-sales`
 
 The seed script enqueues one `open-sales` job per `upcoming` event, delayed until
-`sales_open_at`, job id `open-sales:{eventId}` (idempotent re-seeding). Worker sets
+`sales_open_at`, job id `open-sales.{eventId}` (idempotent re-seeding). Worker sets
 `events.status = on_sale` and publishes `{"type":"sales_opened"}`.
 
 ### 5.6 Live updates
