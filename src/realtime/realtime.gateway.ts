@@ -37,9 +37,15 @@ export class RealtimeGateway implements OnGatewayConnection, OnModuleInit {
     await this.subscriber.psubscribe(EVENT_CHANNEL_PATTERN);
     this.subscriber.on('pmessage', (_pattern: string, channel: string, raw: string) => {
       const eventId = channel.slice(CHANNEL_PREFIX.length);
-      const message = JSON.parse(raw) as EventMessage;
-      const eventName = message.type === 'sales_opened' ? 'sales_opened' : 'seat_update';
-      this.server.to(roomName(eventId)).emit(eventName, message);
+      if (!eventId) return;
+      try {
+        const message = JSON.parse(raw) as EventMessage;
+        const eventName = message.type === 'sales_opened' ? 'sales_opened' : 'seat_update';
+        this.server.to(roomName(eventId)).emit(eventName, message);
+      } catch (error) {
+        // A bad publish must never take the gateway down; the seat map cache repairs within 5 s.
+        this.logger.warn(`Ignoring malformed message on ${channel}: ${error instanceof Error ? error.message : String(error)}`);
+      }
     });
   }
 

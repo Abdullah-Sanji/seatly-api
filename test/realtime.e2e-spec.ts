@@ -39,7 +39,7 @@ describe('realtime gateway', () => {
     await ctx.stop();
   });
 
-  it('broadcasts held, released and sold to everyone in the event room', async () => {
+  it('broadcasts held and sold to everyone in the event room', async () => {
     const event = await createEvent(ctx.prisma, { rows: 1, seatsPerRow: 2 });
     const [seat] = event.seats;
     const alice = await registerUser(ctx.app, 'alice@test.dev');
@@ -49,13 +49,21 @@ describe('realtime gateway', () => {
     sockets.push(a, b);
     await Promise.all([join(a, event.id), join(b, event.id)]);
 
-    const heldOnB = waitFor<{ type: string; seatIds: string[]; expiresAt: string }>(b, 'seat_update');
+    const heldOnBoth = Promise.all([
+      waitFor<{ type: string; seatIds: string[]; expiresAt: string }>(a, 'seat_update'),
+      waitFor<{ type: string; seatIds: string[]; expiresAt: string }>(b, 'seat_update'),
+    ]);
     await http().post(`/events/${event.id}/seats/${seat.id}/hold`).set('Authorization', `Bearer ${alice.accessToken}`);
-    expect(await heldOnB).toEqual({ type: 'held', seatIds: [seat.id], expiresAt: expect.any(String) });
+    const held = { type: 'held', seatIds: [seat.id], expiresAt: expect.any(String) };
+    expect(await heldOnBoth).toEqual([held, held]);
 
-    const soldOnB = waitFor<{ type: string }>(b, 'seat_update');
+    const soldOnBoth = Promise.all([
+      waitFor<{ type: string }>(a, 'seat_update'),
+      waitFor<{ type: string }>(b, 'seat_update'),
+    ]);
     await http().post(`/events/${event.id}/bookings`).set('Authorization', `Bearer ${alice.accessToken}`);
-    expect(await soldOnB).toEqual({ type: 'sold', seatIds: [seat.id] });
+    const sold = { type: 'sold', seatIds: [seat.id] };
+    expect(await soldOnBoth).toEqual([sold, sold]);
   });
 
   it('does not deliver updates for rooms the client has not joined', async () => {
@@ -76,9 +84,13 @@ describe('realtime gateway', () => {
     const socket = io(ctx.baseUrl, { auth: { token: 'garbage' }, transports: ['websocket'] });
     sockets.push(socket);
     const outcome = await new Promise<string>((resolve) => {
-      socket.once('disconnect', () => resolve('disconnected'));
-      socket.once('connect_error', () => resolve('disconnected'));
-      setTimeout(() => resolve('still connected'), 2000);
+      const timer = setTimeout(() => resolve('still connected'), 2000);
+      const settle = (value: string) => {
+        clearTimeout(timer);
+        resolve(value);
+      };
+      socket.once('disconnect', () => settle('disconnected'));
+      socket.once('connect_error', () => settle('disconnected'));
     });
     expect(outcome).toBe('disconnected');
   });
