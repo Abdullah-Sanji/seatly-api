@@ -201,9 +201,13 @@ Global filter envelope:
 { "statusCode": 409, "code": "SEAT_HELD", "message": "Seat is held by another user", "details": {} }
 ```
 
-Codes: `VALIDATION_FAILED`, `UNAUTHORIZED`, `REFRESH_INVALID`, `RATE_LIMITED`,
-`EVENT_NOT_FOUND`, `SEAT_NOT_FOUND`, `SALES_NOT_OPEN`, `SEAT_SOLD`, `SEAT_HELD`,
-`HOLD_LIMIT_REACHED`, `NOT_HOLDER`, `NO_HELD_SEATS`, `HOLD_EXPIRED`, `INTERNAL`.
+Codes: `VALIDATION_FAILED`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `REQUEST_FAILED`,
+`REFRESH_INVALID`, `RATE_LIMITED`, `EMAIL_TAKEN`, `EVENT_NOT_FOUND`, `SEAT_NOT_FOUND`,
+`SALES_NOT_OPEN`, `SEAT_SOLD`, `SEAT_HELD`, `HOLD_LIMIT_REACHED`, `NOT_HOLDER`,
+`NO_HELD_SEATS`, `HOLD_EXPIRED`, `INTERNAL`.
+
+`EMAIL_TAKEN` is returned by register on a duplicate email; `NOT_FOUND`, `FORBIDDEN` and
+`REQUEST_FAILED` map framework-raised 404/403/other 4xx errors.
 The enum lives in the API and is copied verbatim into the web client.
 
 Unknown exceptions log with a request id and return `500 INTERNAL` without internals.
