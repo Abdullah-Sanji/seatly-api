@@ -94,7 +94,7 @@ Holds are not stored in Postgres.
 | `seatmap:{eventId}` | string (JSON) | 5 s | cache of the merged seat map |
 | `refresh:{userId}:{jti}` | string `"1"` | 7 d | refresh-token allowlist |
 | channel `events:{eventId}` | pub/sub | — | seat-state messages, consumed by every gateway instance |
-| BullMQ queue `holds` | BullMQ internal | — | delayed jobs; `expire-hold` job id = `hold:{eventId}:{seatId}:{holdToken}` |
+| BullMQ queue `holds` | BullMQ internal | — | delayed jobs; `expire-hold` job id = `hold.{eventId}.{seatId}.{holdToken}` (BullMQ job ids may not contain `:`) |
 
 `holdToken` is a random UUID generated per hold. It is never derived from the user.
 It exists so that a stale expiry job from an earlier hold cannot release a newer hold
@@ -111,9 +111,9 @@ on the same seat.
    confirm transaction is the real guarantee.)
 5. Generate `holdToken`. Run Lua script `hold.lua` atomically:
    `SET hold:{e}:{s} "{u}:{token}" NX EX ttl`; if it succeeded, `SADD holds:user:{u}:{e} {s}`
-   and `EXPIRE` the set to `ttl`. If `SET NX` failed → `409 SEAT_HELD`.
+   and `EXPIRE` the set to `ttl + 5 s grace`. If `SET NX` failed → `409 SEAT_HELD`.
 6. Enqueue BullMQ job `expire-hold`, id `hold:{e}:{s}:{token}`, delay `ttl` seconds,
-   data `{eventId, seatId, expectedValue: "{u}:{token}"}`.
+   data `{eventId, seatId, userId, holdToken}`.
 7. `DEL seatmap:{e}`; `PUBLISH events:{e} {"type":"held","seatIds":[s],"expiresAt":…}`.
 8. `200 { seatId, expiresAt }`.
 
@@ -149,7 +149,7 @@ then deletes them. Seats are already `sold`, so the only effect is a delayed
 
 ### 5.4 Expiry job — worker for `expire-hold`
 
-Lua script `expire.lua`: `if GET key == expectedValue then DEL key; SREM userSet seatId;
+Lua script `expire.lua`: `if GET key == "{userId}:{holdToken}" then DEL key; SREM userSet seatId;
 return 1 end; return 0`. On 1 → invalidate cache, publish `released`. On 0 → done.
 Job options: 3 attempts, exponential backoff from 1 s, `removeOnComplete: true`.
 

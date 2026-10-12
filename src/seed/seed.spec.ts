@@ -33,4 +33,16 @@ describe('seed', () => {
       expect(arg.data.seats.create).toHaveLength(50);
     }
   });
+
+  it('schedules an open-sales job for each upcoming event when a queue is given', async () => {
+    const prisma = makePrisma(0);
+    const queue = { add: jest.fn().mockResolvedValue(undefined) };
+    await seed(prisma as never, queue as never);
+    expect(queue.add).toHaveBeenCalledTimes(1);
+    const [name, data, opts] = queue.add.mock.calls[0];
+    expect(name).toBe('open-sales');
+    expect(data).toEqual({ eventId: 'evt' });
+    expect(opts.jobId).toBe('open-sales.evt');
+    expect(opts.delay).toBeGreaterThan(0);
+  });
 });

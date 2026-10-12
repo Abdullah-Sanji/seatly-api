@@ -1,5 +1,6 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
+import { EventStatus } from '@prisma/client';
 import { Job } from 'bullmq';
 import { HoldsService } from '../holds/holds.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -36,8 +37,13 @@ export class HoldsProcessor extends WorkerHost {
     }
   }
 
-  // Implemented in Task 15.
-  private async openSales(_data: OpenSalesJob): Promise<void> {
-    return undefined;
+  private async openSales(data: OpenSalesJob): Promise<void> {
+    const { count } = await this.prisma.event.updateMany({
+      where: { id: data.eventId, status: EventStatus.upcoming },
+      data: { status: EventStatus.on_sale },
+    });
+    if (count === 1) {
+      await this.publisher.publish(data.eventId, { type: 'sales_opened' });
+    }
   }
 }

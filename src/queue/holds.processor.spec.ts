@@ -1,6 +1,6 @@
 import { Job } from 'bullmq';
 import { HoldsProcessor } from './holds.processor';
-import { EXPIRE_HOLD_JOB } from './queue.constants';
+import { EXPIRE_HOLD_JOB, OPEN_SALES_JOB } from './queue.constants';
 
 function build(expireResult: boolean) {
   const holds = { expire: jest.fn().mockResolvedValue(expireResult) };
@@ -32,5 +32,30 @@ describe('HoldsProcessor expire-hold', () => {
     const { processor, holds } = build(true);
     await expect(processor.process(job('something-else', {}))).resolves.toBeUndefined();
     expect(holds.expire).not.toHaveBeenCalled();
+  });
+});
+
+describe('HoldsProcessor open-sales', () => {
+  it('flips an upcoming event to on_sale and publishes sales_opened', async () => {
+    const holds = { expire: jest.fn() };
+    const publisher = { publish: jest.fn().mockResolvedValue(undefined) };
+    const prisma = { event: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) } };
+    const processor = new HoldsProcessor(holds as never, publisher as never, prisma as never);
+
+    await processor.process({ name: OPEN_SALES_JOB, data: { eventId: 'e1' } } as Job);
+
+    expect(prisma.event.updateMany).toHaveBeenCalledWith({
+      where: { id: 'e1', status: 'upcoming' },
+      data: { status: 'on_sale' },
+    });
+    expect(publisher.publish).toHaveBeenCalledWith('e1', { type: 'sales_opened' });
+  });
+
+  it('does not publish when the event was already open', async () => {
+    const publisher = { publish: jest.fn() };
+    const prisma = { event: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) } };
+    const processor = new HoldsProcessor({ expire: jest.fn() } as never, publisher as never, prisma as never);
+    await processor.process({ name: OPEN_SALES_JOB, data: { eventId: 'e1' } } as Job);
+    expect(publisher.publish).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,6 @@
 import { EventStatus, PrismaClient } from '@prisma/client';
+import { Queue } from 'bullmq';
+import { OPEN_SALES_JOB, openSalesJobId } from '../queue/queue.constants';
 
 const ROWS = ['A', 'B', 'C', 'D', 'E'] as const;
 const SEATS_PER_ROW = 10;
@@ -26,7 +28,7 @@ export interface SeedResult {
 }
 
 /** Inserts three demo events (on sale / upcoming / closed) with 5 rows × 10 seats each. Idempotent. */
-export async function seed(prisma: PrismaClient): Promise<SeedResult> {
+export async function seed(prisma: PrismaClient, queue?: Queue): Promise<SeedResult> {
   const existing = await prisma.event.count();
   if (existing > 0) {
     return { created: false };
@@ -58,7 +60,18 @@ export async function seed(prisma: PrismaClient): Promise<SeedResult> {
   ];
 
   for (const event of events) {
-    await prisma.event.create({ data: { ...event, seats: { create: seatRows() } } });
+    const created = await prisma.event.create({ data: { ...event, seats: { create: seatRows() } } });
+    if (queue && created.status === EventStatus.upcoming) {
+      await queue.add(
+        OPEN_SALES_JOB,
+        { eventId: created.id },
+        {
+          jobId: openSalesJobId(created.id),
+          delay: Math.max(0, created.salesOpenAt.getTime() - Date.now()),
+          removeOnComplete: true,
+        },
+      );
+    }
   }
   return { created: true };
 }
