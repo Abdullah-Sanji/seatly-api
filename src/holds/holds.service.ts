@@ -8,6 +8,8 @@ import { REDIS_CLIENT } from '../redis/redis.constants';
 import { EXPIRE_LUA, HOLD_LUA, RELEASE_LUA } from './hold-scripts';
 
 export const MAX_HELD_SEATS_PER_EVENT = 6;
+// Key TTL exceeds the expire-job delay so the job (which broadcasts) always runs before Redis silently drops the key.
+export const HOLD_GRACE_SECONDS = 5;
 
 export type HoldResult =
   | { outcome: 'held'; holdToken: string; expiresAt: Date }
@@ -56,7 +58,7 @@ export class HoldsService {
       holdKey(eventId, seatId),
       userHoldsKey(userId, eventId),
       holdValue(userId, holdToken),
-      this.ttlSeconds,
+      this.ttlSeconds + HOLD_GRACE_SECONDS,
       seatId,
       MAX_HELD_SEATS_PER_EVENT,
     );

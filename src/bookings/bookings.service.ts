@@ -6,6 +6,7 @@ import { ErrorCode } from '../common/errors/error-code.enum';
 import { EventsService } from '../events/events.service';
 import { HoldsService, MAX_HELD_SEATS_PER_EVENT } from '../holds/holds.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { HoldsQueue } from '../queue/holds.queue';
 import { EventPublisher } from '../realtime/event-publisher';
 
 export interface HoldResponse {
@@ -20,6 +21,7 @@ export class BookingsService {
     private readonly events: EventsService,
     private readonly holds: HoldsService,
     private readonly publisher: EventPublisher,
+    private readonly holdsQueue: HoldsQueue,
   ) {}
 
   async holdSeat(eventId: string, seatId: string, user: AuthUser): Promise<HoldResponse> {
@@ -46,6 +48,10 @@ export class BookingsService {
       throw new AppException(ErrorCode.SEAT_HELD, HttpStatus.CONFLICT, 'Seat is held by another user');
     }
 
+    await this.holdsQueue.scheduleExpiry(
+      { eventId, seatId, userId: user.id, holdToken: result.holdToken },
+      this.holds.ttlSeconds * 1000,
+    );
     const expiresAt = result.expiresAt.toISOString();
     await this.publisher.publish(eventId, { type: 'held', seatIds: [seatId], expiresAt });
     return { seatId, expiresAt };

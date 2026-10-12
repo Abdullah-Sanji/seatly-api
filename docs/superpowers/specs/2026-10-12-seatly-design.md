@@ -89,8 +89,8 @@ Holds are not stored in Postgres.
 
 | Key | Type | TTL | Purpose |
 |---|---|---|---|
-| `hold:{eventId}:{seatId}` | string `"{userId}:{holdToken}"` | `HOLD_TTL_SECONDS` (300) | the hold; created with `SET NX EX` |
-| `holds:user:{userId}:{eventId}` | set of `seatId` | refreshed to `HOLD_TTL_SECONDS` on each add | the user's current holds for confirm |
+| `hold:{eventId}:{seatId}` | string `"{userId}:{holdToken}"` | `HOLD_TTL_SECONDS` + 5 s grace | the hold; created with `SET NX EX` |
+| `holds:user:{userId}:{eventId}` | set of `seatId` | refreshed to `HOLD_TTL_SECONDS` + 5 s on each add | the user's current holds for confirm |
 | `seatmap:{eventId}` | string (JSON) | 5 s | cache of the merged seat map |
 | `refresh:{userId}:{jti}` | string `"1"` | 7 d | refresh-token allowlist |
 | channel `events:{eventId}` | pub/sub | — | seat-state messages, consumed by every gateway instance |
@@ -119,6 +119,7 @@ on the same seat.
 
 If step 6 fails after step 5 succeeded, the key's TTL still clears the hold; only the
 broadcast is lost. Acceptable; documented in code.
+The key TTL is 5 s longer than the job delay so the expiry job, which is what broadcasts `released`, always runs before Redis silently drops the key; the TTL only matters if the job is lost.
 
 ### 5.2 Release a seat — `DELETE /events/:eventId/seats/:seatId/hold`
 

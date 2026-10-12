@@ -1,5 +1,5 @@
 import { holdKey, userHoldsKey } from '../src/common/redis-keys';
-import { HoldsService, MAX_HELD_SEATS_PER_EVENT } from '../src/holds/holds.service';
+import { HOLD_GRACE_SECONDS, HoldsService, MAX_HELD_SEATS_PER_EVENT } from '../src/holds/holds.service';
 import { startTestApp, TestContext } from './setup/test-app';
 
 describe('HoldsService (real Redis)', () => {
@@ -25,7 +25,9 @@ describe('HoldsService (real Redis)', () => {
     expect(await holds.tryHold('e1', 's1', 'u2')).toEqual({ outcome: 'seat_held' });
     expect(await holds.tryHold('e1', 's1', 'u1')).toEqual({ outcome: 'seat_held' });
 
-    expect(await ctx.redis.ttl(holdKey('e1', 's1'))).toBeGreaterThan(55);
+    const keyTtl = await ctx.redis.ttl(holdKey('e1', 's1'));
+    expect(keyTtl).toBeGreaterThan(holds.ttlSeconds);
+    expect(keyTtl).toBeLessThanOrEqual(holds.ttlSeconds + HOLD_GRACE_SECONDS);
     expect(await holds.getHeldSeatIds('e1', 'u1')).toEqual(['s1']);
   });
 

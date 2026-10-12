@@ -12,6 +12,7 @@ import { REDIS_CLIENT } from './redis/redis.constants';
 import { RedisModule } from './redis/redis.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { HoldsModule } from './holds/holds.module';
+import { QueueModule } from './queue/queue.module';
 import { BookingsModule } from './bookings/bookings.module';
 
 @Module({
@@ -36,6 +37,7 @@ import { BookingsModule } from './bookings/bookings.module';
     EventsModule,
     RealtimeModule,
     HoldsModule,
+    QueueModule,
     BookingsModule,
   ],
 })
