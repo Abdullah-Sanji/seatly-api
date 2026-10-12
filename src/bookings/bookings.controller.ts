@@ -5,7 +5,7 @@ import { AuthUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UserThrottlerGuard } from '../common/guards/user-throttler.guard';
-import { BookingsService, HoldResponse } from './bookings.service';
+import { BookingResult, BookingsService, HoldResponse } from './bookings.service';
 
 @ApiTags('bookings')
 @ApiBearerAuth()
@@ -34,5 +34,15 @@ export class BookingsController {
     @CurrentUser() user: AuthUser,
   ): Promise<void> {
     return this.bookings.releaseSeat(eventId, seatId, user);
+  }
+
+  @Post('bookings')
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(JwtAuthGuard)
+  confirm(
+    @Param('eventId', ParseUUIDPipe) eventId: string,
+    @CurrentUser() user: AuthUser,
+  ): Promise<BookingResult> {
+    return this.bookings.confirm(eventId, user);
   }
 }

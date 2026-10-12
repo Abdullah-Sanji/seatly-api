@@ -6,10 +6,11 @@ import { QueueModule } from '../queue/queue.module';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { BookingsController } from './bookings.controller';
 import { BookingsService } from './bookings.service';
+import { MeController } from './me.controller';
 
 @Module({
   imports: [EventsModule, HoldsModule, QueueModule, RealtimeModule],
-  controllers: [BookingsController],
+  controllers: [BookingsController, MeController],
   providers: [BookingsService, UserThrottlerGuard],
 })
 export class BookingsModule {}
