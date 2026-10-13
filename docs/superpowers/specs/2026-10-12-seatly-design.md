@@ -67,7 +67,7 @@ Cross-cutting:
   the old `jti` is deleted, a new one is written and a new cookie is set. Presenting a
   `jti` that is not in Redis returns `401 REFRESH_INVALID`. Logout deletes the `jti`
   and clears the cookie.
-- CORS: `origin = WEB_ORIGIN`, `credentials: true`.
+- CORS: `origin = WEB_ORIGIN` (comma-separated list of allowed origins, e.g. the Vite dev server and the Docker web image), `credentials: true`.
 - Socket handshake: the access token is passed in `auth.token`; invalid or missing
   token disconnects the socket.
 

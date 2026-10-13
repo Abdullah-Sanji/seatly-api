@@ -6,7 +6,7 @@ Design: `docs/superpowers/specs/2026-10-12-seatly-design.md`.
 ## Run everything
 
 ```bash
-docker compose up --build          # postgres + redis + api on :3000
+docker compose up --build          # postgres + redis + api on :3000 (WEB_ORIGIN allows :5173 and :8080)
 open http://localhost:3000/docs    # Swagger
 ```
 

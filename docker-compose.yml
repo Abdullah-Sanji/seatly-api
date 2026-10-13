@@ -39,7 +39,7 @@ services:
       REDIS_URL: redis://redis:6379
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev-access-secret-change-me-please}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-refresh-secret-change-me-please}
-      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:8080}
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:5173,http://localhost:8080}
       HOLD_TTL_SECONDS: ${HOLD_TTL_SECONDS:-300}
       COOKIE_SECURE: "false"
       THROTTLE_ENABLED: "true"

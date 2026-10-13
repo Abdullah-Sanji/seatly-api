@@ -15,7 +15,13 @@ describe('validateEnv', () => {
     expect(env.COOKIE_SECURE).toBe(true);
     expect(env.THROTTLE_ENABLED).toBe(true);
     expect(env.NODE_ENV).toBe('development');
-    expect(env.WEB_ORIGIN).toBe('http://localhost:5173');
+    expect(env.WEB_ORIGIN).toEqual(['http://localhost:5173']);
+  });
+
+  it('parses a comma-separated WEB_ORIGIN list and rejects a non-URL entry', () => {
+    const env = validateEnv({ ...valid, WEB_ORIGIN: 'http://localhost:5173, http://localhost:8080' });
+    expect(env.WEB_ORIGIN).toEqual(['http://localhost:5173', 'http://localhost:8080']);
+    expect(() => validateEnv({ ...valid, WEB_ORIGIN: 'http://ok.test,not-a-url' })).toThrow(/WEB_ORIGIN/);
   });
 
   it('rejects a missing DATABASE_URL with a readable message', () => {

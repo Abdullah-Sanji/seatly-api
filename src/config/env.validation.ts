@@ -12,7 +12,12 @@ export const envSchema = z.object({
   REDIS_URL: z.string().url(),
   JWT_ACCESS_SECRET: z.string().min(16),
   JWT_REFRESH_SECRET: z.string().min(16),
-  WEB_ORIGIN: z.string().url().default('http://localhost:5173'),
+  // Comma-separated list so one API can serve the Vite dev server and the Docker web image at once.
+  WEB_ORIGIN: z
+    .string()
+    .default('http://localhost:5173')
+    .transform((value) => value.split(',').map((origin) => origin.trim()).filter(Boolean))
+    .pipe(z.array(z.string().url()).min(1)),
   HOLD_TTL_SECONDS: z.coerce.number().int().positive().default(300),
   COOKIE_SECURE: booleanString,
   THROTTLE_ENABLED: z.enum(['true', 'false']).default('true').transform((v) => v === 'true'),

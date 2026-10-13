@@ -5,7 +5,7 @@ describe('GET /health', () => {
   let ctx: TestContext;
 
   beforeAll(async () => {
-    ctx = await startTestApp();
+    ctx = await startTestApp({ WEB_ORIGIN: 'http://localhost:5173,http://localhost:8080' });
   });
 
   afterAll(async () => {
@@ -16,6 +16,27 @@ describe('GET /health', () => {
     const res = await request(ctx.app.getHttpServer()).get('/health');
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ postgres: 'ok', redis: 'ok' });
+  });
+
+  it.each(['http://localhost:5173', 'http://localhost:8080'])(
+    'answers a CORS preflight for the configured origin %s with credentials',
+    async (origin) => {
+      const res = await request(ctx.app.getHttpServer())
+        .options('/auth/register')
+        .set('Origin', origin)
+        .set('Access-Control-Request-Method', 'POST');
+      expect(res.status).toBe(204);
+      expect(res.headers['access-control-allow-origin']).toBe(origin);
+      expect(res.headers['access-control-allow-credentials']).toBe('true');
+    },
+  );
+
+  it('rejects a CORS preflight from an unlisted origin', async () => {
+    const res = await request(ctx.app.getHttpServer())
+      .options('/auth/register')
+      .set('Origin', 'http://evil.test')
+      .set('Access-Control-Request-Method', 'POST');
+    expect(res.headers['access-control-allow-origin']).toBeUndefined();
   });
 
   it('serves swagger at /docs', async () => {
