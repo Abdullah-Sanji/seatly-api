@@ -16,11 +16,11 @@ export class EventsController {
     return this.events.listEvents();
   }
 
-  @Get(':id')
+  @Get(':eventId')
   @UseGuards(OptionalJwtAuthGuard)
   @ApiBearerAuth()
   detail(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('eventId', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthUser | null,
   ): Promise<EventDetail> {
     return this.events.getEventDetail(id, user?.id ?? null);

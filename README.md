@@ -53,4 +53,11 @@ pnpm test:e2e    # Testcontainers: real Postgres + Redis per test file (Docker m
 
 ## Endpoints
 
-See Swagger at `/docs`. Errors always look like `{ statusCode, code, message, details }`.
+The contract is `contracts/openapi.yaml` (HTTP + Socket.IO); Swagger at `/docs` serves it, the frontend generates
+its types from it and the e2e suite validates every response against it. See `contracts/README.md`. Errors always look like `{ statusCode, code, message, details }`.
+
+## Automated story delivery
+
+`/story <JIRA-KEY>` in Claude Code runs a Jira story through intake, test cases, contract handshake, parallel
+backend/frontend implementation, verification and two PRs with no human step until review.
+Design: `docs/superpowers/specs/2026-10-15-story-automation-workflow.md`. Config: `.claude/story.config.json`.

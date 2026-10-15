@@ -6,6 +6,7 @@ import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers
 import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
 import Redis from 'ioredis';
 import { configureApp } from '../../src/app.setup';
+import { attachContractErrorHandler, enableContractValidation } from '../../src/contract/contract';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { REDIS_CLIENT } from '../../src/redis/redis.constants';
 // AppModule is imported lazily inside startTestApp(): ConfigModule.forRoot() reads and validates
@@ -49,6 +50,9 @@ export async function startTestApp(envOverrides: Record<string, string> = {}): P
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
   const app = moduleRef.createNestApplication();
   configureApp(app);
+  enableContractValidation(app); // every response is checked against contracts/openapi.yaml
+  await app.init();
+  attachContractErrorHandler(app);
   await app.listen(0);
   const { port } = app.getHttpServer().address() as AddressInfo;
 

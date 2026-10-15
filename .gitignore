@@ -2,3 +2,5 @@ node_modules
 dist
 .env
 coverage
+.mcp.json
+contracts/openapi.base.yaml

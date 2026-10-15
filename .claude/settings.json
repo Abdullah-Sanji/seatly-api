@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "additionalDirectories": ["../seatly-web", "../seatly-worktrees"],
+    "allow": [
+      "Bash(pnpm *)",
+      "Bash(git *)",
+      "Bash(gh *)",
+      "Bash(docker *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(grep *)",
+      "Bash(rg *)"
+    ]
+  }
+}

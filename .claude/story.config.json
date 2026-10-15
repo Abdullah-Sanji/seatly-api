@@ -1,0 +1,20 @@
+{
+  "jira": {
+    "projectKey": "NFTH",
+    "storyIssueType": "Story",
+    "subtaskIssueType": "Sub-task",
+    "statuses": {
+      "inProgress": "In Progress",
+      "inReview": "In Review"
+    },
+    "labels": { "be": "backend", "fe": "frontend", "automation": "claude-story" }
+  },
+  "repos": {
+    "api": { "path": ".", "github": "Abdullah-Sanji/seatly-api", "baseBranch": "main" },
+    "web": { "path": "../seatly-web", "github": "Abdullah-Sanji/seatly-web", "baseBranch": "main" }
+  },
+  "worktreeRoot": "../seatly-worktrees",
+  "branches": { "be": "feat/{KEY}-be", "fe": "feat/{KEY}-fe" },
+  "retries": { "contractReview": 2, "implement": 2, "integration": 2 },
+  "limits": { "maxSubtasksPerSide": 4 }
+}

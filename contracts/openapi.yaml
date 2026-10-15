@@ -1,0 +1,495 @@
+openapi: 3.1.0
+info:
+  title: Seatly API
+  version: 0.1.0
+  description: |
+    Seat booking playground. This file is the API contract: the frontend generates its
+    types from it and the backend e2e suite validates every response against it.
+    Change it only through the contract step of a story (see docs/stories/README.md).
+servers:
+  - url: http://localhost:3000
+tags:
+  - name: auth
+  - name: events
+  - name: bookings
+  - name: me
+  - name: health
+
+# Socket.IO messages are part of the contract too. Each entry names an event the server
+# emits to clients in an event room and the schema of its payload.
+x-socket-events:
+  seat_update:
+    description: Seat state changed in the event room the client joined.
+    payload: '#/components/schemas/SeatUpdateMessage'
+  sales_opened:
+    description: Sales opened for the event room the client joined.
+    payload: '#/components/schemas/SalesOpenedMessage'
+x-socket-client-messages:
+  join_event:
+    description: 'Join the room for one event. Ack is `{ joined: eventId }`.'
+    payload: '#/components/schemas/RoomRequest'
+  leave_event:
+    description: 'Leave the room for one event. Ack is `{ left: eventId }`.'
+    payload: '#/components/schemas/RoomRequest'
+
+paths:
+  /auth/register:
+    post:
+      tags: [auth]
+      operationId: register
+      summary: Create an account and sign in
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Credentials' }
+      responses:
+        '200':
+          description: Signed in. The refresh token is set as an httpOnly cookie.
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccessTokenResponse' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '409':
+          description: EMAIL_TAKEN
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorBody' }
+              example: { statusCode: 409, code: EMAIL_TAKEN, message: Email already registered, details: {} }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/login:
+    post:
+      tags: [auth]
+      operationId: login
+      summary: Sign in
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Credentials' }
+      responses:
+        '200':
+          description: Signed in. The refresh token is set as an httpOnly cookie.
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccessTokenResponse' }
+        '401':
+          description: UNAUTHORIZED (bad credentials)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorBody' }
+              example: { statusCode: 401, code: UNAUTHORIZED, message: Invalid credentials, details: {} }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      operationId: refresh
+      summary: Exchange the refresh cookie for a new access token
+      description: Reads the `seatly_refresh` cookie (path `/auth`). Rotates the refresh token.
+      responses:
+        '200':
+          description: New token pair.
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccessTokenResponse' }
+        '401':
+          description: REFRESH_INVALID (missing, expired or reused cookie)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorBody' }
+              example: { statusCode: 401, code: REFRESH_INVALID, message: Refresh token invalid, details: {} }
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      summary: Revoke the refresh token and clear the cookie
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Logged out. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /events:
+    get:
+      tags: [events]
+      operationId: listEvents
+      summary: List events ordered by start date
+      responses:
+        '200':
+          description: All events, soonest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/EventSummary' }
+
+  /events/{eventId}:
+    get:
+      tags: [events]
+      operationId: getEvent
+      summary: Event with its seat map
+      description: Anonymous callers see `held`; a signed-in caller sees `held_by_me` for their own holds.
+      security: [{}, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/EventId'
+      responses:
+        '200':
+          description: Event and seats.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EventDetail' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '404': { $ref: '#/components/responses/EventNotFound' }
+
+  /events/{eventId}/seats/{seatId}/hold:
+    post:
+      tags: [bookings]
+      operationId: holdSeat
+      summary: Hold a seat for the caller
+      description: Holds last `HOLD_TTL_SECONDS` (default 300). A user may hold at most 4 seats per event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/EventId'
+        - $ref: '#/components/parameters/SeatId'
+      responses:
+        '200':
+          description: Seat held.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HoldResponse' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: EVENT_NOT_FOUND or SEAT_NOT_FOUND
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorBody' }
+        '409':
+          description: SALES_NOT_OPEN, SEAT_SOLD (details.seatIds), SEAT_HELD or HOLD_LIMIT_REACHED (details.limit)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorBody' }
+              examples:
+                seatHeld:
+                  value: { statusCode: 409, code: SEAT_HELD, message: Seat is held by another user, details: {} }
+                seatSold:
+                  value: { statusCode: 409, code: SEAT_SOLD, message: Seat already sold, details: { seatIds: ['6f1c…'] } }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    delete:
+      tags: [bookings]
+      operationId: releaseSeat
+      summary: Release the caller's hold on a seat
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/EventId'
+        - $ref: '#/components/parameters/SeatId'
+      responses:
+        '204': { description: Released (also when the hold had already expired). }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: NOT_HOLDER
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorBody' }
+        '404': { $ref: '#/components/responses/EventNotFound' }
+
+  /events/{eventId}/bookings:
+    post:
+      tags: [bookings]
+      operationId: confirmBooking
+      summary: Turn all of the caller's held seats in this event into a booking
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/EventId'
+      responses:
+        '201':
+          description: Booking created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BookingResult' }
+        '400':
+          description: VALIDATION_FAILED or NO_HELD_SEATS
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorBody' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: EVENT_NOT_FOUND or SEAT_NOT_FOUND
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorBody' }
+        '409':
+          description: HOLD_EXPIRED (details.lostSeatIds) or SEAT_SOLD (details.seatIds)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorBody' }
+
+  /me/bookings:
+    get:
+      tags: [me]
+      operationId: myBookings
+      summary: The caller's bookings, newest first
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Bookings.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/MyBooking' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /health:
+    get:
+      tags: [health]
+      operationId: health
+      summary: Liveness of Postgres and Redis
+      responses:
+        '200':
+          description: Both dependencies answer.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+        '503':
+          description: At least one dependency is down.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    EventId:
+      name: eventId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    SeatId:
+      name: seatId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    ValidationFailed:
+      description: VALIDATION_FAILED. `details.errors` lists the messages when a body failed validation.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorBody' }
+          example:
+            statusCode: 400
+            code: VALIDATION_FAILED
+            message: Validation failed
+            details: { errors: ['email must be an email'] }
+    Unauthorized:
+      description: UNAUTHORIZED. Missing or invalid bearer token.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorBody' }
+          example: { statusCode: 401, code: UNAUTHORIZED, message: Authentication required, details: {} }
+    EventNotFound:
+      description: EVENT_NOT_FOUND
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorBody' }
+          example: { statusCode: 404, code: EVENT_NOT_FOUND, message: Event not found, details: {} }
+    RateLimited:
+      description: RATE_LIMITED
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorBody' }
+          example: { statusCode: 429, code: RATE_LIMITED, message: Too many requests, details: {} }
+
+  schemas:
+    ErrorCode:
+      type: string
+      enum:
+        - VALIDATION_FAILED
+        - UNAUTHORIZED
+        - FORBIDDEN
+        - NOT_FOUND
+        - REQUEST_FAILED
+        - REFRESH_INVALID
+        - RATE_LIMITED
+        - EMAIL_TAKEN
+        - EVENT_NOT_FOUND
+        - SEAT_NOT_FOUND
+        - SALES_NOT_OPEN
+        - SEAT_SOLD
+        - SEAT_HELD
+        - HOLD_LIMIT_REACHED
+        - NOT_HOLDER
+        - NO_HELD_SEATS
+        - HOLD_EXPIRED
+        - INTERNAL
+
+    ErrorBody:
+      type: object
+      description: Every non-2xx response has this shape.
+      required: [statusCode, code, message, details]
+      additionalProperties: false
+      properties:
+        statusCode: { type: integer }
+        code: { $ref: '#/components/schemas/ErrorCode' }
+        message: { type: string }
+        details:
+          type: object
+          additionalProperties: true
+
+    Credentials:
+      type: object
+      required: [email, password]
+      additionalProperties: false
+      properties:
+        email: { type: string, format: email, example: ada@example.com }
+        password: { type: string, minLength: 8, maxLength: 72 }
+
+    AccessTokenResponse:
+      type: object
+      required: [accessToken]
+      additionalProperties: false
+      properties:
+        accessToken: { type: string, description: 'JWT, 15 minutes.' }
+
+    EventStatus:
+      type: string
+      enum: [upcoming, on_sale, closed]
+
+    SeatState:
+      type: string
+      enum: [available, held, held_by_me, sold]
+
+    EventSummary:
+      type: object
+      required: [id, name, venueName, startsAt, salesOpenAt, status, availableCount]
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        venueName: { type: string }
+        startsAt: { type: string, format: date-time }
+        salesOpenAt: { type: string, format: date-time }
+        status: { $ref: '#/components/schemas/EventStatus' }
+        availableCount: { type: integer, minimum: 0 }
+
+    SeatView:
+      type: object
+      required: [id, rowLabel, seatNumber, priceCents, state]
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        rowLabel: { type: string }
+        seatNumber: { type: integer, minimum: 1 }
+        priceCents: { type: integer, minimum: 0 }
+        state: { $ref: '#/components/schemas/SeatState' }
+
+    EventDetail:
+      type: object
+      description: EventSummary plus the seat map. Keep the shared fields identical to EventSummary.
+      required: [id, name, venueName, startsAt, salesOpenAt, status, availableCount, seats]
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        venueName: { type: string }
+        startsAt: { type: string, format: date-time }
+        salesOpenAt: { type: string, format: date-time }
+        status: { $ref: '#/components/schemas/EventStatus' }
+        availableCount: { type: integer, minimum: 0 }
+        seats:
+          type: array
+          items: { $ref: '#/components/schemas/SeatView' }
+
+    HoldResponse:
+      type: object
+      required: [seatId, expiresAt]
+      additionalProperties: false
+      properties:
+        seatId: { type: string, format: uuid }
+        expiresAt: { type: string, format: date-time }
+
+    BookingResult:
+      type: object
+      required: [bookingId, seatIds, totalCents]
+      additionalProperties: false
+      properties:
+        bookingId: { type: string, format: uuid }
+        seatIds:
+          type: array
+          items: { type: string, format: uuid }
+        totalCents: { type: integer, minimum: 0 }
+
+    BookedSeat:
+      type: object
+      required: [rowLabel, seatNumber]
+      additionalProperties: false
+      properties:
+        rowLabel: { type: string }
+        seatNumber: { type: integer, minimum: 1 }
+
+    MyBooking:
+      type: object
+      required: [id, eventName, seats, totalCents, createdAt]
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        eventName: { type: string }
+        seats:
+          type: array
+          items: { $ref: '#/components/schemas/BookedSeat' }
+        totalCents: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
+
+    Health:
+      type: object
+      required: [postgres, redis]
+      additionalProperties: false
+      properties:
+        postgres: { type: string, enum: [ok, down] }
+        redis: { type: string, enum: [ok, down] }
+
+    SeatUpdateMessage:
+      type: object
+      required: [type, seatIds]
+      additionalProperties: false
+      properties:
+        type: { type: string, enum: [held, released, sold] }
+        seatIds:
+          type: array
+          items: { type: string, format: uuid }
+        expiresAt:
+          type: string
+          format: date-time
+          description: Present only when type is `held`.
+
+    SalesOpenedMessage:
+      type: object
+      required: [type]
+      additionalProperties: false
+      properties:
+        type: { type: string, enum: [sales_opened] }
+
+    RoomRequest:
+      type: object
+      required: [eventId]
+      additionalProperties: false
+      properties:
+        eventId: { type: string, format: uuid }
