@@ -1,8 +1,9 @@
-import { Controller, Get, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AuthUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
+import { ListEventsQuery } from './list-events.query';
 import { EventsService } from './events.service';
 import { EventDetail, EventSummary } from './seat-map';
 
@@ -12,8 +13,8 @@ export class EventsController {
   constructor(private readonly events: EventsService) {}
 
   @Get()
-  list(): Promise<EventSummary[]> {
-    return this.events.listEvents();
+  list(@Query() query: ListEventsQuery): Promise<EventSummary[]> {
+    return this.events.listEvents(query.q);
   }
 
   @Get(':eventId')

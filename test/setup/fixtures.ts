@@ -2,7 +2,8 @@ import { INestApplication } from '@nestjs/common';
 import { Event, EventStatus, PrismaClient, Seat } from '@prisma/client';
 import request from 'supertest';
 
-export const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+export const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
 export interface CreateEventOptions {
   status?: EventStatus;
@@ -10,6 +11,8 @@ export interface CreateEventOptions {
   seatsPerRow?: number;
   salesOpenAt?: Date;
   name?: string;
+  venueName?: string;
+  startsAt?: Date;
 }
 
 export type EventWithSeats = Event & { seats: Seat[] };
@@ -24,8 +27,8 @@ export async function createEvent(
   return prisma.event.create({
     data: {
       name: opts.name ?? 'Test Event',
-      venueName: 'Test Hall',
-      startsAt: new Date(Date.now() + 7 * 24 * 3600 * 1000),
+      venueName: opts.venueName ?? 'Test Hall',
+      startsAt: opts.startsAt ?? new Date(Date.now() + 7 * 24 * 3600 * 1000),
       salesOpenAt: opts.salesOpenAt ?? new Date(),
       status: opts.status ?? EventStatus.on_sale,
       seats: {
