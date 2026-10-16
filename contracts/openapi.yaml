@@ -124,15 +124,46 @@ paths:
     get:
       tags: [events]
       operationId: listEvents
-      summary: List events ordered by start date
+      summary: List events ordered by start date, optionally filtered by a search term
+      description: >-
+        Public. Returns events ordered by `startsAt` ascending. When `q` is non-empty, only events
+        whose `name` or `venueName` contains `q` as a case-insensitive literal substring are
+        returned (`%` and `_` are not wildcards). An absent or empty `q` returns the full list.
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: >-
+            Case-insensitive substring matched against event name and venue name. Empty means no
+            filter. More than 100 characters is rejected with 400 VALIDATION_FAILED.
+          schema: { type: string, maxLength: 100 }
+          example: jazz
       responses:
         '200':
-          description: All events, soonest first.
+          description: Matching events (all events when `q` is absent or empty), soonest first. Empty array when nothing matches.
           content:
             application/json:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/EventSummary' }
+              example:
+                - id: 3f1c2a9e-7b4d-4e8a-9c21-5d6f7a8b9c01
+                  name: Riyadh Jazz Night
+                  venueName: King Fahd Cultural Centre
+                  startsAt: '2026-11-20T18:00:00.000Z'
+                  salesOpenAt: '2026-10-01T09:00:00.000Z'
+                  status: on_sale
+                  availableCount: 42
+        '400':
+          description: VALIDATION_FAILED when `q` is longer than 100 characters. `details.errors` lists the messages.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorBody' }
+              example:
+                statusCode: 400
+                code: VALIDATION_FAILED
+                message: Validation failed
+                details: { errors: ['q must be shorter than or equal to 100 characters'] }
 
   /events/{eventId}:
     get:
