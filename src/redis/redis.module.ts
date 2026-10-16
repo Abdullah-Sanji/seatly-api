@@ -8,11 +8,20 @@ function createClient(config: ConfigService<Env, true>): Redis {
   return new Redis(config.get('REDIS_URL'), { maxRetriesPerRequest: null, lazyConnect: false });
 }
 
+// The ready check issues INFO, which fails once psubscribe has put the connection in subscriber mode.
+function createSubscriber(config: ConfigService<Env, true>): Redis {
+  return new Redis(config.get('REDIS_URL'), {
+    maxRetriesPerRequest: null,
+    lazyConnect: false,
+    enableReadyCheck: false,
+  });
+}
+
 @Global()
 @Module({
   providers: [
     { provide: REDIS_CLIENT, inject: [ConfigService], useFactory: createClient },
-    { provide: REDIS_SUBSCRIBER, inject: [ConfigService], useFactory: createClient },
+    { provide: REDIS_SUBSCRIBER, inject: [ConfigService], useFactory: createSubscriber },
   ],
   exports: [REDIS_CLIENT, REDIS_SUBSCRIBER],
 })
