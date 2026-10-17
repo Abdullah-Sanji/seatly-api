@@ -6,7 +6,13 @@ import { ErrorCode } from '../common/errors/error-code.enum';
 import { holdKey, seatMapKey } from '../common/redis-keys';
 import { PrismaService } from '../prisma/prisma.service';
 import { REDIS_CLIENT } from '../redis/redis.constants';
-import { CachedSeatMap, EventDetail, EventSummary, personaliseSeatMap, toSeatMapCache } from './seat-map';
+import {
+  CachedSeatMap,
+  EventDetail,
+  EventSummary,
+  personaliseSeatMap,
+  toSeatMapCache,
+} from './seat-map';
 
 const SEAT_MAP_CACHE_SECONDS = 5;
 
@@ -17,8 +23,19 @@ export class EventsService {
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
-  async listEvents(): Promise<EventSummary[]> {
-    const events = await this.prisma.event.findMany({ orderBy: { startsAt: 'asc' }, select: { id: true } });
+  async listEvents(q?: string): Promise<EventSummary[]> {
+    const events = await this.prisma.event.findMany({
+      where: q
+        ? {
+            OR: [
+              { name: { contains: q, mode: 'insensitive' } },
+              { venueName: { contains: q, mode: 'insensitive' } },
+            ],
+          }
+        : undefined,
+      orderBy: { startsAt: 'asc' },
+      select: { id: true },
+    });
     const details = await Promise.all(events.map((event) => this.getEventDetail(event.id, null)));
     return details.map(({ seats: _seats, ...summary }) => summary);
   }

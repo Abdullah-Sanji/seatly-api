@@ -1,11 +1,17 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { EventStatus } from '@prisma/client';
 import { Job } from 'bullmq';
 import { HoldsService } from '../holds/holds.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventPublisher } from '../realtime/event-publisher';
-import { EXPIRE_HOLD_JOB, ExpireHoldJob, HOLDS_QUEUE, OPEN_SALES_JOB, OpenSalesJob } from './queue.constants';
+import {
+  EXPIRE_HOLD_JOB,
+  ExpireHoldJob,
+  HOLDS_QUEUE,
+  OPEN_SALES_JOB,
+  OpenSalesJob,
+} from './queue.constants';
 
 @Processor(HOLDS_QUEUE)
 export class HoldsProcessor extends WorkerHost {
@@ -17,6 +23,11 @@ export class HoldsProcessor extends WorkerHost {
     private readonly prisma: PrismaService,
   ) {
     super();
+  }
+
+  @OnWorkerEvent('error')
+  onError(error: Error): void {
+    this.logger.error(`Worker error: ${error.message}`);
   }
 
   async process(job: Job): Promise<void> {
@@ -31,7 +42,12 @@ export class HoldsProcessor extends WorkerHost {
   }
 
   private async expireHold(data: ExpireHoldJob): Promise<void> {
-    const released = await this.holds.expire(data.eventId, data.seatId, data.userId, data.holdToken);
+    const released = await this.holds.expire(
+      data.eventId,
+      data.seatId,
+      data.userId,
+      data.holdToken,
+    );
     if (released) {
       await this.publisher.publish(data.eventId, { type: 'released', seatIds: [data.seatId] });
     }
