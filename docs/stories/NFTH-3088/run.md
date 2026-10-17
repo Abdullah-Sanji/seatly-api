@@ -30,3 +30,5 @@ Minor gap noted by the verifier: TC-13 does not assert that Spring Orchestra is 
 
 ## Pull requests
 
+- Backend: https://github.com/Abdullah-Sanji/seatly-api/pull/1
+- Frontend: https://github.com/Abdullah-Sanji/seatly-web/pull/1
