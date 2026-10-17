@@ -2,7 +2,7 @@
 
 ## Commands
 
-### 1. `SEATLY_API_DIR=<apiDir> pnpm e2e:fresh`: exit 1
+### 1. `SEATLY_API_DIR=<apiDir> pnpm e2e:fresh` (first run): exit 1, environment stall
 
 ```
 [WebServer]  Image seatly-e2e-web Built 
@@ -37,7 +37,7 @@ Error: Timed out waiting 300000ms from config.webServer.
 [ELIFECYCLE] Command failed with exit code 1.
 ```
 
-### 2. `docker compose -p seatly-e2e -f <apiDir>/docker-compose.yml --profile full logs --tail 100` (stack failed to start): exit 0, last 30 lines
+### 2. `docker compose -p seatly-e2e -f <apiDir>/docker-compose.yml --profile full logs --tail 100`: exit 0, last 30 lines
 
 ```
 postgres-1  | 
@@ -72,7 +72,7 @@ postgres-1  | 2026-10-17 15:08:26.681 UTC [57] LOG:  database system was shut do
 postgres-1  | 2026-10-17 15:08:26.685 UTC [1] LOG:  database system is ready to accept connections
 ```
 
-Container state after the timeout: postgres and redis running and healthy (started 15:08:25, ready 15:08:26); api and web stuck in `created` with StartedAt=0001-01-01, so they never started.
+postgres and redis came up healthy within about 1s; api and web stayed `created` and never started. The Docker VM was lagging: a container started during the next command reported 17:05:42 UTC while the host read 17:10:10 UTC at the end. This is the local environment, not the code.
 
 ### 3. `SEATLY_API_DIR=<apiDir> pnpm e2e:down`: exit 0
 
@@ -102,9 +102,7 @@ $ docker compose -p seatly-e2e -f ${SEATLY_API_DIR:-../seatly-api}/docker-compos
  Network seatly-e2e_default Removed 
 ```
 
-Docker health check run in the same command: a container started during it reported 17:05:42 UTC while the host read 17:10:10 UTC at the end, and `docker run --rm alpine date` took minutes. Docker reports 4 GB of memory.
-
-### 4. Rerun `SEATLY_API_DIR=<apiDir> pnpm e2e:fresh`: still running when the result was due, last lines so far
+### 4. `SEATLY_API_DIR=<apiDir> pnpm e2e:fresh` (rerun): exit 0
 
 ```
 [WebServer] web-1       | 2026/10/17 17:10:36 [notice] 1#1: nginx/1.31.6
@@ -139,13 +137,41 @@ Running 4 tests using 2 workers
 EXIT=0
 ```
 
+### 5. `SEATLY_API_DIR=<apiDir> pnpm e2e:down`: exit 0
+
+```
+$ docker compose -p seatly-e2e -f ${SEATLY_API_DIR:-../seatly-api}/docker-compose.yml --profile full down -v
+ Container seatly-e2e-web-1 Stopping 
+ Container seatly-e2e-web-1 Stopped 
+ Container seatly-e2e-web-1 Removing 
+ Container seatly-e2e-web-1 Removed 
+ Container seatly-e2e-api-1 Stopping 
+ Container seatly-e2e-api-1 Stopped 
+ Container seatly-e2e-api-1 Removing 
+ Container seatly-e2e-api-1 Removed 
+ Container seatly-e2e-postgres-1 Stopping 
+ Container seatly-e2e-redis-1 Stopping 
+ Container seatly-e2e-postgres-1 Stopped 
+ Container seatly-e2e-postgres-1 Removing 
+ Container seatly-e2e-postgres-1 Removed 
+ Container seatly-e2e-redis-1 Stopped 
+ Container seatly-e2e-redis-1 Removing 
+ Container seatly-e2e-redis-1 Removed 
+ Volume seatly-e2e_redisdata Removing 
+ Volume seatly-e2e_pgdata Removing 
+ Network seatly-e2e_default Removing 
+ Volume seatly-e2e_redisdata Removed 
+ Volume seatly-e2e_pgdata Removed 
+ Network seatly-e2e_default Removed 
+```
+
 ## Matrix
 
 | TC | layer | test | result | note |
 |---|---|---|---|---|
-| TC-13 | browser | web `e2e/events-search.spec.ts:3` | fail | The test covers the Given/When/Then: search Boulevard, check `?q=`, reload, clear, and check that all 3 events return. It never ran because the stack did not start (webServer timed out after 300000ms). |
-| TC-14 | browser | web `e2e/events-search.spec.ts:27` | fail | The test types zzz-nothing and asserts "No events match your search". It never ran, for the same reason. |
+| TC-13 | browser | web `e2e/events-search.spec.ts:3` "TC-13 visitor searches by venue, refreshes, then clears" | pass | Types Boulevard, then asserts `?q=Boulevard`, that Comedy Showcase is shown and Riyadh Jazz Night is not; reloads and asserts the input value and the list again; clears and asserts all 3 seeded events are back and `q` is gone. Passed on the rerun (1.9s). Minor gap: "only Comedy Showcase" is checked by the absence of Jazz Night but not of Spring Orchestra. |
+| TC-14 | browser | web `e2e/events-search.spec.ts:27` "TC-14 visitor sees the no-match message end to end" | pass | Types zzz-nothing and asserts "No events match your search". Passed on the rerun. |
 
 ## Failures
 
-- **side: fe** | **TC-13, TC-14** | `pnpm e2e:fresh` failed with `Error: Timed out waiting 300000ms from config.webServer.` and no tests ran. **Evidence:** compose created api and web but never started them, even though postgres and redis reached healthy within about 1s; the Docker VM clock and execution were lagging by minutes (container 17:05:42 vs host 17:10:10). **Why fe (uncertain):** there is no evidence of an API defect, and the stall looks like the local Docker environment rather than either code base. It is assigned to fe by default because the Playwright webServer and global-setup harness lives in seatly-web. Recommended action: restart Docker Desktop or give it more memory, then rerun. A rerun was started but had not finished when this report was due.
+None in the code. The first `e2e:fresh` run exited 1 because the local Docker VM stalled (`Timed out waiting 300000ms from config.webServer`; api and web never started). The identical rerun passed 4/4. The new global-setup API health wait fixed the attempt-1 race, and SMOKE-1 and TC-13 now pass on a fresh stack.
